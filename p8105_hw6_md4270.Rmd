@@ -2,9 +2,105 @@
 title: "p8105_hw6_md4270"
 author: "Manye Dong"
 date: "2023-11-18"
-output: html_document
+output: github_document
 ---
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
+library(readr)
+library(broom)
+```
+
+## Problem 1
+```{r message=FALSE, warning=FALSE}
+homicide = read_csv("homicide-data.csv")
+```
+
+Create a city_state variable (e.g. “Baltimore, MD”), and a binary variable indicating whether the homicide is solved. Omit cities Dallas, TX; Phoenix, AZ; and Kansas City, MO – these don’t report victim race. Also omit Tulsa, AL – this is a data entry mistake. For this problem, limit your analysis those for whom victim_race is white or black. Be sure that victim_age is numeric.
+```{r message=FALSE, warning=FALSE}
+homicide_clean = 
+  homicide |>
+  janitor::clean_names() |>
+  mutate(city_state = paste(city, state, sep = ", "), 
+         resolved = as.numeric(disposition == "Closed by arrest"),
+         victim_age = as.numeric(victim_age)) |>
+  filter(!city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL")& 
+           victim_race %in% c("White", "Black") & 
+           victim_sex != "Unknown") |>
+  select(city_state, victim_age, victim_sex, victim_race, resolved)
+```
+
+For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.
+```{r message=FALSE, warning=FALSE}
+# Convert categorical variables to factors
+train_data = 
+  homicide_clean |>
+  filter(city_state == "Baltimore, MD")
+```
+
+```{r message=FALSE, warning=FALSE}
+# Fit the logistic regression model
+logistic_reg = glm(resolved ~ victim_age + victim_sex + victim_race, data = train_data, family = binomial())
+```
+
+```{r message=FALSE, warning=FALSE}
+# Extract the estimates and confidence intervals for male vs female victims
+tidy_result = 
+  logistic_reg|>
+  broom::tidy(conf.int = T) |>
+  filter(term=="victim_sexMale") |>
+  mutate(odds_ratio = exp(estimate),
+         lower_ci = exp(conf.low),
+         upper_ci = exp(conf.high)) |>
+  select(term, odds_ratio, lower_ci, upper_ci) |>
+  knitr::kable(digits = 3)
+
+tidy_result
+```
+
+Now run glm for each of the cities in your dataset, and extract the adjusted odds ratio (and CI) for solving homicides comparing male victims to female victims. Do this within a “tidy” pipeline, making use of purrr::map, list columns, and unnest as necessary to create a dataframe with estimated ORs and CIs for each city.
+```{r message=FALSE, warning=FALSE}
+test_all_cities = function(city, df){
+  df |> 
+    filter(city_state == city) |>
+    glm(resolved ~ victim_age + victim_sex + victim_race, data = _, family = "binomial") |>
+    broom::tidy(conf.int = T) |>
+    filter(term=="victim_sexMale") |>
+    mutate(odds_ratio = exp(estimate),
+           lower_ci = exp(conf.low),
+           upper_ci = exp(conf.high)) |>
+    select(term, odds_ratio, lower_ci, upper_ci)
+}
+```
+
+```{r message=FALSE, warning=FALSE}
+cities = unique(homicide_clean$city_state)
+
+for_all_cities = tibble(
+  city = cities,
+  test = map(cities, test_all_cities, df = homicide_clean)
+) |> 
+  unnest(test) |>
+  select(-term)
+
+head(for_all_cities)
+```
+
+Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot. [edit]
+```{r message=FALSE, warning=FALSE}
+for_all_cities |>
+  mutate(city_state = fct_reorder(city, odds_ratio)) |>
+  ggplot(aes(x = city_state, y = odds_ratio, color = city_state)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = lower_ci, ymax = upper_ci)) +
+  theme_bw() +
+  labs(x = "City State", y = "Odds Ratio", title = "Odds Ratio by Sex") +
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x=element_blank(),
+        axis.text.x=element_blank(), axis.ticks.x=element_blank())
+```
+
+
+## Problem 2
+```{r}
+
 ```
 
