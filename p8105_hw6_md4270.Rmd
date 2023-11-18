@@ -1,0 +1,10 @@
+---
+title: "p8105_hw6_md4270"
+author: "Manye Dong"
+date: "2023-11-18"
+output: html_document
+---
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
