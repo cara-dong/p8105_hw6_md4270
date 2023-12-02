@@ -84,7 +84,7 @@ for_all_cities = tibble(
   select(-term)
 ```
 
-Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot. [edit]
+Create a plot that shows the estimated ORs and CIs for each city. Organize cities according to estimated OR, and comment on the plot.
 ```{r message=FALSE, warning=FALSE}
 for_all_cities |>
   mutate(city_state = fct_reorder(city, odds_ratio)) |>
@@ -96,6 +96,12 @@ for_all_cities |>
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank(),
         axis.text.x = element_blank(), axis.ticks.x = element_blank())
 ```
+
+The majority of cities have actual odds ratios for solving homicides comparing male victims to female victims smaller than 1. This means that crimes involving male victims tend to have smaller odds of getting resolved compared to those involving female victims, keeping all other variables fixed and taking victim age, sex and race into accounts. 
+
+The confidence intervals for about half of the cities exclude 1, which suggests that there is generally a significant difference in odds ratio for resolution by victim sex.
+
+Albuquerque, MN seems to have the highest odds ratio, and New York, NY has the lowest odds ratio.
 
 
 ## Problem 2
@@ -119,31 +125,31 @@ boot_strap = weather_df |>
   modelr::bootstrap(n = 5000) |> 
   mutate(
     mods = map(strap, ~lm(tmax ~ tmin + prcp, data = .x)),
-    mods_beta = map(mods, broom::glance),
-    mods_r2 = map(mods, broom::tidy)) |> 
-  unnest(mods_r2, mods_beta) |> 
+    beta = map(mods, broom::glance),
+    r2 = map(mods, broom::tidy)) |> 
+  unnest(r2, beta) |> 
   dplyr::select(.id, term, estimate, r.squared) |> 
   pivot_wider(names_from = term, values_from = estimate) |> 
   rename(
-    beta_0 = `(Intercept)`,
-    beta_1 = tmin,
-    beta_2 = prcp) |> 
+    beta0 = `(Intercept)`,
+    beta1 = tmin,
+    beta2 = prcp) |> 
   summarise(r.squared = r.squared,
-    log_beta12 = log(beta_1 * beta_2),
-    log_beta01 = log(beta_0 * beta_1))
+    log1 = log(beta1 * beta2),
+    log2 = log(beta0 * beta1))
 ```
 
 Extract quantile:
 ```{r message=FALSE, warning=FALSE}
-r2_ci = 
+r_sq_ci = 
   quantile(boot_strap$r.squared, probs = c(0.025,0.975)) |> 
-  knitr::kable(digits=4)
+  knitr::kable(digits=4, col.names = c("Quantile", "R-squared"), title = "R-squared 95% Confidence Interval")
 
 log_ci = 
-  quantile(boot_strap$log_beta01, probs = c(0.025,0.975)) |>  
-  knitr::kable(digits=4)
+  quantile(boot_strap$log2, probs = c(0.025,0.975)) |>  
+  knitr::kable(digits=4, col.names = c("Quantile", "Log(beta0 * beta1)"), title = "Log(beta0 * beta1) 95% Confidence Interval")
 
-r2_ci
+r_sq_ci
 log_ci
 ```
 
@@ -152,23 +158,28 @@ Plot:
 boot_strap |> 
   ggplot(aes(x = r.squared)) +
   geom_density() +
-  labs(title = "Distribution of Bootstrapped R-squared Estimates", x = "R-squared", y = "Density")
+  labs(title = "Bootstrapped R-squared Estimates", x = "R-squared", y = "Density")
 ```
+
+The density plot of bootstrapped R-squared estimates shows a roughly unimodal, slightly left-skewed distribution that reaches its highest density when R-squared is around 0.92.
 
 ```{r message=FALSE, warning=FALSE}
 boot_strap |> 
-  ggplot(aes(x = log_beta12)) +
+  ggplot(aes(x = log1)) +
   geom_density() +
-  labs(title = "Distribution of Bootstrapped log(beta1*beta2) Estimates", x = "log(beta1*beta2)", y = "Density")
+  labs(title = "Bootstrapped log(beta1*beta2) Estimates", x = "Log(beta1*beta2)", y = "Density")
 ```
+
+The density plot of bootstrapped log(beta1 times beta2) estimates shows an unimodal, heavily left-skewed distribution that reaches its highest density when log(beta1 times beta2) is around -5.5.
 
 ```{r message=FALSE, warning=FALSE}
 boot_strap |> 
-  ggplot(aes(x = log_beta01)) +
+  ggplot(aes(x = log2)) +
   geom_density() +
-  labs(title = "Distribution of Bootstrapped log(beta0*beta1) Estimates", x = "log(beta0*beta1)", y = "Density")
+  labs(title = "Bootstrapped log(beta0*beta1) Estimates", x = "Log(beta0*beta1)", y = "Density")
 ```
 
+The density plot of bootstrapped log(beta0 times beta1) estimates shows a roughly normally distribution. It is unimodal and reaches its highest density when log(beta0 times beta1) is around 2.1.
 
 ## Problem 3
 Load and clean the data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.).
@@ -208,6 +219,7 @@ high_cor_var_pairs = data.frame(
 high_cor_var_pairs |> 
   knitr::kable(digits=4)
 ```
+
 Based on the correlation matrix, we want to exclude some variables from highly correlated pairs (correlation >=0.7) to avoid multicollinearity. The pairs are (ppbmi delwt),  (ppwt	delwt), (ppwt	ppbmi), (mrace	frace). 
 
 ```{r message=FALSE, warning=FALSE}
@@ -217,6 +229,7 @@ cor_ppwt = cor_matrix["bwt", "ppwt"]
 
 c(cor_ppbmi, cor_delwt, cor_ppwt)
 ```
+
 Given the three variables' correlation with outcome bwt, we will only keep the one with highest aboslute correlation, which is delwt.
 
 ```{r message=FALSE, warning=FALSE}
@@ -225,6 +238,7 @@ cor_mrace = cor_matrix["bwt", "mrace"]
 
 c(cor_frace, cor_mrace)
 ```
+
 Similarly, given the two variables' correlation with outcome bwt, we will only keep the one with higher absolute correlation, which is cor_mrace.
 
 ```{r message=FALSE, warning=FALSE}
